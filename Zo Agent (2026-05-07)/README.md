@@ -81,10 +81,3 @@ The following gaps surfaced repeatedly across mapping files and were independent
 
 10. **Tool-registration completeness for dynamic zo-tools surfaces is not asserted.** Subfolder agent flagged that `agents/` tests don't verify that all tools registered via the dynamic-tools mechanism are reachable, schema-valid, and exposed to the LLM in the right state.
 
-## Output location note
-
-These files were generated under sandbox restrictions in `/tmp/ZO Agent/`. To move them into the Shift-Left repo, run from outside the sandbox:
-
-```bash
-cp -R "/tmp/ZO Agent" ~/Downloads/Shift-Left-Appointment-Management/
-```
