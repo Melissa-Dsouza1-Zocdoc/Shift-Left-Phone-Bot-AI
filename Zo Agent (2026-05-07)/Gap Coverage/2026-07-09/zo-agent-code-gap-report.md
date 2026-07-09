@@ -12,8 +12,7 @@
 
 Each row is one scenario. It tells you: what the caller does, what Zo does today, whether a test already exists, what is missing, and what the developer should do.
 
-**Category markers** (so related cases stay together):
-☎️ Call Entry & Setup · 👋 Greeting & Goal Routing · 🎂 DOB · 👤 Name · 📞 Phone · ⚧ Gender · 🏥 Insurance · 📅 Date/Time · 🩺 Provider · 📖 Booking · 🔁 Reschedule/Cancel · 🔐 Auth/Identity · ☎️ Transfer · 🗣 Language · 🔒 PHI/Privacy · ⭐ CSAT
+**Category markers** (so related cases stay together): each batch is grouped under plain category headings, for example — Call Entry & Setup, Greeting & Goal Routing, DOB, Name, Phone, Gender, Insurance, Date/Time, Provider, Booking, Reschedule/Cancel, Auth/Identity, Transfer, Language, PHI/Privacy, CSAT.
 
 **Existing test?**
 - ✅ **Excellent** — covered well
@@ -35,7 +34,7 @@ Each row is one scenario. It tells you: what the caller does, what Zo does today
 
 This is the very start of every call: the phone rings, Zo answers, plays the "this call may be recorded" message, greets the caller, figures out what they want, and either books them or transfers them to a human.
 
-## ☎️ Call Entry & Setup
+## Call Entry & Setup
 *(code: `src/agent.py` — the entry point that answers the call and sets everything up)*
 
 | # | What the caller does | What Zo does today | Existing test? | What's missing → what could go wrong | Priority | Action |
@@ -46,7 +45,7 @@ This is the very start of every call: the phone rings, Zo answers, plays the "th
 | 4 | Has a **bad connection** — the call keeps trying to reconnect | Zo waits up to 10 seconds; if it still hasn't reconnected, it gives up and cleanly ends the job (so it doesn't hang forever and leak memory). | 🔴 Missing | Good safety behavior, but **nothing tests it**. If someone changes the 10-second logic later, a call could silently hang for hours again (this actually happened before — a job retried for ~38 hours). | 🟠 Medium | `Add test` for the reconnect give-up timer. |
 | 5 | Presses **"1" for Spanish** during the opening message | Zo captures the key-press and switches the call to Spanish before the greeting. | 🟡 Needs improvement | The Spanish *language wording* is tested, but the **key-press handling itself** is not — e.g. pressing 1 more than once, or pressing it late in the call. Behavior is undefined. | 🟠 Medium | `Talk to dev` on intended behavior for repeat/late presses, then `Add test`. |
 
-## 👋 Greeting & Goal Routing
+## Greeting & Goal Routing
 *(code: `src/agents/greeting_agent.py` — the first agent the caller talks to; figures out intent and routes)*
 
 | # | What the caller does | What Zo does today | Existing test? | What's missing → what could go wrong | Priority | Action |
