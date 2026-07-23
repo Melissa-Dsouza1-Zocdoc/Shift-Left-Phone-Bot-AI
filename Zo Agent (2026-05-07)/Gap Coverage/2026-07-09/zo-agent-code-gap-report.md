@@ -270,3 +270,110 @@ are in the **live** paths: placebo name tests (21), unbounded collect loops (27)
 verification-free schedule auth (28), the never-enforced `requires_authentication` flag (29),
 search-swallows-all-errors (30), and the flow-controller crash/stale-state/whole-goal-outage
 branches (49-51).*
+
+---
+
+# Appendix A — Worked example: how to actually test case 36
+
+Case 36 says the location/provider agents have **no tests**. Here's a concrete,
+runnable example that closes the location half of that gap, so "Add test" isn't
+abstract. It follows the existing pattern in `tests/test_greeting_agent.py`.
+
+**What we're testing:** `SelectLocationAgent.submit_location` (`select_location_agent.py:46-59`).
+The two things worth asserting are (1) the caller's answer gets **stored**, and
+(2) the flow **hands off** to the next step. We patch `get_next_agent` so we test
+*this* agent alone — the flow controller has its own tests.
+
+Create `tests/agents/test_select_location_agent.py`:
+
+```python
+"""Tests for SelectLocationAgent (closes case 36 for the location step)."""
+
+from unittest.mock import MagicMock
+
+import pytest
+
+from src.agents.select_location_agent import SelectLocationAgent
+from src.flow import flow_registry
+from src.session_state import SessionState
+
+
+@pytest.fixture
+def context():
+    """A fake RunContext whose session.userdata is a real SessionState."""
+    context = MagicMock()
+    context.session.userdata = SessionState(
+        call_goal="schedule",
+        to_phone_number="+16468591511",
+    )
+    return context
+
+
+# --- Metadata / wiring (cheap, no async) ---
+def test_agent_name() -> None:
+    agent = SelectLocationAgent.__new__(SelectLocationAgent)
+    assert agent.agent_name == "select-location-agent"
+
+
+def test_get_output_fields() -> None:
+    assert SelectLocationAgent.get_output_fields() == ["location"]
+
+
+def test_registered_for_schedule_goal() -> None:
+    assert SelectLocationAgent in flow_registry.GOAL_AGENTS["schedule"]
+
+
+# --- Behavior ---
+@pytest.mark.asyncio
+async def test_submit_location_stores_value_and_hands_off(context, mocker):
+    """HAPPY PATH: the caller's location is saved and the flow advances."""
+    agent = SelectLocationAgent()
+    expected_next = MagicMock()
+    mock_next = mocker.patch.object(agent, "get_next_agent", return_value=expected_next)
+
+    result = await agent.submit_location(context, location="Brooklyn")
+
+    assert context.session.userdata.location == "Brooklyn"   # (1) stored
+    assert result is expected_next                            # (2) handed off
+    mock_next.assert_called_once_with(context)
+
+
+@pytest.mark.asyncio
+async def test_submit_location_accepts_any_string_documents_missing_validation(
+    context, mocker
+):
+    """DOCUMENTS THE GAP (case 37): no validation today — empty string is stored.
+
+    When validation is added, THIS test will fail and force a conscious update.
+    """
+    agent = SelectLocationAgent()
+    mocker.patch.object(agent, "get_next_agent", return_value=MagicMock())
+
+    await agent.submit_location(context, location="")
+
+    assert context.session.userdata.location == ""
+```
+
+**Run it** (from the repo root):
+
+```bash
+make test                                        # whole unit suite
+# or just this file, matching CI:
+uv run pytest tests/agents/test_select_location_agent.py -v
+```
+
+**How to read each test:**
+
+| Test | What it proves | If it ever fails… |
+|------|----------------|-------------------|
+| `test_agent_name` / `test_get_output_fields` / `test_registered_for_schedule_goal` | The agent is wired into the `schedule` flow and declares the `location` output the DAG routes on. | Someone renamed the agent, its output field, or unregistered it — routing would silently break. |
+| `test_submit_location_stores_value_and_hands_off` | The core job: the caller's answer is saved to `SessionState.location` and control moves on. | The submit logic or handoff broke — a real caller's location would be dropped. |
+| `test_submit_location_accepts_any_string...` | Pins the *current* no-validation behavior on purpose. | Validation was added (good!) — update this test to expect a re-prompt instead. |
+
+**The provider half:** copy this file to `tests/agents/test_select_provider_agent.py`,
+swap `SelectLocationAgent`→`SelectProviderAgent`, `submit_location`→`submit_provider`,
+`location`→`provider`, and `"select-location-agent"`→`"select-provider-agent"`.
+
+> Note: these are **unit** tests (mocked, fast). They prove the plumbing works, not
+> that the LLM picks the right location from speech — that belongs in an *evaluation*
+> test under `tests/evaluations/` (see `test_collect_dob_flow.py` for the pattern).
